@@ -41,9 +41,14 @@ public:
     }
 
     // Get the argmax of bandits
-    size_t get_max() {
+    size_t get_max_bandit_loc() {
         auto max_elem = std::max_element(bandit.begin(), bandit.end());
         return std::distance(std::begin(bandit), max_elem);
+    }
+
+    size_t get_max_reward_loc() {
+        auto max_elem = std::max_element(reward.begin(), reward.end());
+        return std::distance(std::begin(reward), max_elem);
     }
 
     float get_avg_reward() {
@@ -92,7 +97,8 @@ public:
     float step() {
         float reward_tot = 0;
         for(int i=0; i<nagents; i++) {
-            int max = agent[i].get_max();
+            int max = agent[i].get_max_reward_loc();
+            //std::cout<<max<<std::endl;
             agent[i].sample(max);
             reward_tot += agent[i].get_avg_reward();
         }
@@ -101,7 +107,7 @@ public:
 
     void simulate(int max_step) {
         for(int i=0; i< max_step; i++) {
-            step();
+            //step();
             std::cout<<"Current Step: "<<i+1<<", Average Reward: "<< step() <<std::endl;
         }
     }
