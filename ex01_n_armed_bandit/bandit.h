@@ -74,14 +74,15 @@ class Policy {
 public:
     //Policy(const Bandit& bandit): bandit(bandit) {}
     virtual void simulate(int n) = 0;
+    virtual ~Policy(){}
 private:
     // Perform a single run
-    virtual void run(int n) = 0;
+    virtual float step() = 0;
 };
 
 
 // Define greedy RL policy
-class GreedyPolicy: Policy {
+class GreedyPolicy: public Policy {
 public:
     GreedyPolicy(int nagents, int narms):
             nagents(nagents), narms(narms) {
@@ -98,10 +99,10 @@ public:
         return reward_tot/ static_cast<float>(nagents);
     }
 
-    void sample(int max_step) {
+    void simulate(int max_step) {
         for(int i=0; i< max_step; i++) {
             step();
-            std::cout<<"Current Step: "<<i+1<<" Average Reward: "<< step() <<std::endl;
+            std::cout<<"Current Step: "<<i+1<<", Average Reward: "<< step() <<std::endl;
         }
     }
 
