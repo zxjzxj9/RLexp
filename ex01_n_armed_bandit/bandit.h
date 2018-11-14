@@ -9,6 +9,7 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <iomanip>
 
 class Bandit {
 
@@ -81,8 +82,8 @@ public:
     virtual void simulate(int n) = 0;
     virtual ~Policy(){}
 private:
-    // Perform a single run
-    virtual float step() = 0;
+    // Perform a single run, return #1: average reward, #2: average hit rate
+    virtual std::pair<float, float> step() = 0;
 };
 
 
@@ -94,21 +95,27 @@ public:
         for(int i=0; i<nagents; i++) agent.emplace_back(narms);
     }
 
-    float step() {
+    std::pair<float, float> step() {
         float reward_tot = 0;
+        int hit_cnt = 0;
         for(int i=0; i<nagents; i++) {
             int max = agent[i].get_max_reward_loc();
             //std::cout<<max<<std::endl;
             agent[i].sample(max);
             reward_tot += agent[i].get_avg_reward();
+            if (agent[i].get_max_reward_loc() == agent[i].get_max_bandit_loc()) hit_cnt++;
         }
-        return reward_tot/ static_cast<float>(nagents);
+        return std::make_pair<float, float>(reward_tot/static_cast<float>(nagents),
+                                            hit_cnt/ static_cast<float>(nagents));
     }
 
     void simulate(int max_step) {
         for(int i=0; i< max_step; i++) {
-            //step();
-            std::cout<<"Current Step: "<<i+1<<", Average Reward: "<< step() <<std::endl;
+            auto ret = step();
+            std::cout<<"Current Step: "<<std::setw(6)<<i+1
+                     <<", Average Reward: "<<std::setw(10)<< ret.first
+                     <<", Average Hit Rate: " << std::setw(10) << ret.second
+                     <<std::endl;
         }
     }
 

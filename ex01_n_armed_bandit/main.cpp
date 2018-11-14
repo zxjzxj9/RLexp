@@ -14,6 +14,6 @@ int main(int argc, char** argv) {
     // bd.print();
     // std::cout<<bd.get_max()<<std::endl;
     std::unique_ptr<Policy> p(new GreedyPolicy(2000, 10));
-    p->simulate(100);
+    p->simulate(1000);
     return 0;
 }
