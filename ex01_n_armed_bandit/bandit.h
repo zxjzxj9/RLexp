@@ -52,6 +52,10 @@ public:
         return std::distance(std::begin(reward), max_elem);
     }
 
+    size_t get_arms_num() {
+        return n_arms;
+    }
+
     float get_avg_reward() {
         return reward_tot/static_cast<float>(cnt_tot);
     }
@@ -123,6 +127,53 @@ private:
     std::vector<Bandit> agent;
     int nagents;
     int narms;
+};
+
+class EGreedyPolicy: public Policy {
+public:
+    EGreedyPolicy(int nagents, int narms, float epsilon=0.1):
+            nagents(nagents), narms(narms), epsilon(epsilon) {
+        for(int i=0; i<nagents; i++) agent.emplace_back(narms);
+    }
+
+    std::pair<float, float>step() {
+        float reward_tot = 0;
+        int hit_cnt = 0;
+        for(int i=0; i<nagents; i++) {
+            int max;
+            if (dist(rg) > epsilon) {
+                max = agent[i].get_max_reward_loc();
+            } else {
+                // Randomly choice between 0 ~ max
+                max = static_cast<int>(dist(rg)*agent[i].get_arms_num());
+            }
+            //std::cout<<max<<std::endl;
+            agent[i].sample(max);
+            reward_tot += agent[i].get_avg_reward();
+            if (agent[i].get_max_reward_loc() == agent[i].get_max_bandit_loc()) hit_cnt++;
+        }
+        return std::make_pair<float, float>(reward_tot/static_cast<float>(nagents),
+                                            hit_cnt/ static_cast<float>(nagents));
+    }
+
+
+    void simulate(int max_step) {
+        for(int i=0; i< max_step; i++) {
+            auto ret = step();
+            std::cout<<"Current Step: "<<std::setw(6)<<i+1
+                     <<", Average Reward: "<<std::setw(10)<< ret.first
+                     <<", Average Hit Rate: " << std::setw(10) << ret.second
+                     <<std::endl;
+        }
+    }
+
+private:
+    std::vector<Bandit> agent;
+    int nagents;
+    int narms;
+    float epsilon;
+    std::mt19937 rg{std::random_device{}()};
+    std::uniform_real_distribution<> dist{0.0, 1.0};
 };
 
 #endif //EX01_N_ARMED_BANDIT_BANDIT_H
