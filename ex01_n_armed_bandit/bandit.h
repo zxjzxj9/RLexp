@@ -117,8 +117,8 @@ public:
         for(int i=0; i< max_step; i++) {
             auto ret = step();
             std::cout<<"Current Step: "<<std::setw(6)<<i+1
-                     <<", Average Reward: "<<std::setw(10)<< ret.first
-                     <<", Average Hit Rate: " << std::setw(10) << ret.second
+                     <<" , Average Reward: "<<std::setw(10)<< ret.first
+                     <<" , Average Hit Rate: " << std::setw(10) << ret.second
                      <<std::endl;
         }
     }
@@ -161,8 +161,8 @@ public:
         for(int i=0; i< max_step; i++) {
             auto ret = step();
             std::cout<<"Current Step: "<<std::setw(6)<<i+1
-                     <<", Average Reward: "<<std::setw(10)<< ret.first
-                     <<", Average Hit Rate: " << std::setw(10) << ret.second
+                     <<" , Average Reward: "<<std::setw(10)<< ret.first
+                     <<" , Average Hit Rate: " << std::setw(10) << ret.second
                      <<std::endl;
         }
     }
