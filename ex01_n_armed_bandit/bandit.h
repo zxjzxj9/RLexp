@@ -20,7 +20,7 @@ public:
         for(int i=0; i<n_arms; i++) {
             bandit.push_back(dist(rg));
             reward.push_back(0);
-            // cnt.push_back(0);
+            cnt.push_back(0);
         }
         reward_tot = 0;
     }
@@ -32,23 +32,26 @@ public:
         std::normal_distribution<float> dist(mu, sigma);
         float ret = dist(rg);
         // Update reward for every bandit number
-        reward[bandit_idx] = update(ret, reward[bandit_idx]);
+        // cnt[bandit_idx] += 1;
+        update(ret, bandit_idx);
         reward_tot += ret;
     }
 
     // Update reward for each step
-    virtual float update(float val, float q_curr) {
-        return val + (q_curr - val)/ static_cast<float>(cnt_tot);
+    virtual void update(float val, int bandit_idx) {
+        cnt[bandit_idx] += 1;
+        reward[bandit_idx] = reward[bandit_idx] +
+                             (val - reward[bandit_idx])/static_cast<float>(cnt[bandit_idx]);
     }
 
     // Get the argmax of bandits
     size_t get_max_bandit_loc() {
-        auto max_elem = std::max_element(bandit.begin(), bandit.end());
+        auto max_elem = std::max_element(std::begin(bandit), std::end(bandit));
         return std::distance(std::begin(bandit), max_elem);
     }
 
     size_t get_max_reward_loc() {
-        auto max_elem = std::max_element(reward.begin(), reward.end());
+        auto max_elem = std::max_element(std::begin(reward), std::end(reward));
         return std::distance(std::begin(reward), max_elem);
     }
 
@@ -76,6 +79,7 @@ private:
     std::mt19937 rg{std::random_device{}()};
     std::vector<float> bandit;
     std::vector<float> reward;
+    std::vector<int> cnt;
     //std::vector<int> cnt;
 };
 
