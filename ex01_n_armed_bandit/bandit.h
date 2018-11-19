@@ -247,5 +247,43 @@ private:
     std::uniform_real_distribution<> dist{0.0, 1.0};
 };
 
+class GradientPolicy: public Policy {
+
+public:
+    GradientPolicy(int nagents, int narms, float epsilon=0.1):
+            nagents(nagents), narms(narms), epsilon(epsilon) {
+        for(int i=0; i<nagents; i++) agent.emplace_back(narms);
+    }
+
+    std::pair<float, float>step() {
+        float reward_tot = 0;
+        int hit_cnt = 0;
+        for(int i=0; i<nagents; i++) {
+            agent[i].sample();
+            reward_tot += agent[i].get_avg_reward();
+            if (agent[i].get_max_reward_loc() == agent[i].get_max_bandit_loc()) hit_cnt++;
+        }
+        return std::make_pair<float, float>(reward_tot/static_cast<float>(nagents),
+                                            hit_cnt/ static_cast<float>(nagents));
+    }
+
+    void simulate(int max_step) {
+        for(int i=0; i< max_step; i++) {
+            auto ret = step();
+            std::cout<<"Current Step: "<<std::setw(6)<<i+1
+                     <<" , Average Reward: "<<std::setw(10)<< ret.first
+                     <<" , Average Hit Rate: " << std::setw(10) << ret.second
+                     <<std::endl;
+        }
+    }
+
+private:
+    std::vector <GBandit> agent;
+    int nagents;
+    int narms;
+    float epsilon;
+    std::mt19937 rg{std::random_device{}()};
+    std::uniform_real_distribution<> dist{0.0, 1.0};
+};
 
 #endif //EX01_N_ARMED_BANDIT_BANDIT_H
