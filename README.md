@@ -10,3 +10,6 @@ The is the code for the **Experiments of Reinforcement Learning**, which will be
 	- Some basic results can be viewed as follows
 	![Fig 1.1 Simulate Result](./ex01_n_armed_bandit/imgs/result.png)
 	- It can be seen that *ε-Greedy Policy* is apprently better than *Greedy Policy*
+
+* **Ex2** finite markov decision process
+	- This problem contains a n x n chessboard, with some of the location has given positive rewards, while out of the chessboard with a negative reward
