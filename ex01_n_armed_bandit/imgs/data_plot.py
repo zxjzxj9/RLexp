@@ -34,5 +34,5 @@ plt.plot(idx, prob, color='g', ls="-", label="gradient_prob")
 
 plt.legend()
 plt.xlabel("step")
-plt.savefig("result.png", dpi=120)
+plt.savefig("result.png", dpi=300)
 plt.show()
