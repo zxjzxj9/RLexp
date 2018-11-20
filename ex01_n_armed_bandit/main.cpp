@@ -17,5 +17,7 @@ int main(int argc, char** argv) {
     p->simulate(1000);
     std::unique_ptr<Policy> q(new EGreedyPolicy(2000, 10));
     q->simulate(1000);
+    std::unique_ptr<Policy> r(new GradientPolicy(2000, 10));
+    r->simulate(1000);
     return 0;
 }

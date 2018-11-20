@@ -21,9 +21,17 @@ greedy = np.genfromtxt("./egreed.dat", dtype=(np.int32, np.float, np.float))
 idx = [t[0] for t in greedy]
 reward = [t[1] for t in greedy]
 prob = [t[2] for t in greedy]
-
 plt.plot(idx, reward, color='b', ls="--", label="$\epsilon$-greedy_reward")
 plt.plot(idx, prob, color='b', ls="-", label="$\epsilon$-greedy_prob")
+
+
+greedy = np.genfromtxt("./grad.dat", dtype=(np.int32, np.float, np.float))
+idx = [t[0] for t in greedy]
+reward = [t[1] for t in greedy]
+prob = [t[2] for t in greedy]
+plt.plot(idx, reward, color='g', ls="--", label="gradient_reward")
+plt.plot(idx, prob, color='g', ls="-", label="gradient_prob")
+
 plt.legend()
 plt.xlabel("step")
 plt.savefig("result.png")
