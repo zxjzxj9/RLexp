@@ -43,11 +43,11 @@ public:
     // step a move, return the reward, and teleport
     // always set out-of-boundary reward -1
     float move(Direction d, std::pair<int, int>& coord) {
+        int coordt = coord.first*m + coord.second;
         switch(d) {
             case LEFT:
                 if(coord.first == 0) return -1;
                 coord.first -= 1;
-                //int t = coord.first*m + coord.second;
                 break;
             case RIGHT:
                 if(coord.first == m - 1) return -1;
@@ -68,6 +68,17 @@ public:
 private:
     std::unique_ptr<float []> reward;
     std::unique_ptr<int []> teleport;
+
+    // convert the coordinate x, y to array index
+    int coord2idx(std::pair<int, int> coord) {
+
+    }
+
+    // inverse of the above function
+    std::pair<int, int> idx2coord(int idx) {
+
+    }
+
     int n,m;
 };
 
