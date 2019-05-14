@@ -150,6 +150,7 @@ for episode in range(300):
                 dqn_t.load_state_dict(copy.deepcopy(dqn.state_dict()))
 env.close()
 
+### Test the model
 state = env.reset()
 step = 0
 while True:
