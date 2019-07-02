@@ -14,4 +14,4 @@ The is the code for the **Experiments of Reinforcement Learning**, which will be
 * **Ex2** gridworld for finite markov decision process
 	- This problem contains a n x n gridworld, with some of the location has given positive rewards, while out of the gridworld with a negative reward. While we want to find a optimal value function, we shall have the following formula according to Bellman's equation. Therefore, this problem can be solved with dynamic programming (DP) with an iterative process.
 	$$v_*\left(s\right) = \max_a \sum_{s',r} p\left(s',r|s,a\right)\left(r+\gamma \cdot v_*(s')\right)$$
-	- We will add 
+	- We will first initialize the gridworld with zero values, and then iterate the gridworld until the board converge. Thus we could get the value of each grid. By choosing the optimal value in the grid, we can get an optimal path.
