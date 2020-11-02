@@ -10,7 +10,10 @@ import numpy as np
 from torch import optim, distributions
 
 from model import PolicyNet, ValueNet, list_to_tensor
-import queue
+
+from torch.utils.tensorboard import SummaryWriter
+
+writer = SummaryWriter("./log")
 
 env = gym.make("Pong-v0")
 
@@ -24,9 +27,9 @@ env = gym.make("Pong-v0")
 # plt.imshow(np.array(obs), cmap='gray')
 # plt.savefig("test.png")
 
-MAXSTEP = 256
+MAXSTEP = 128
 BATCHSIZE = 16
-EPOCH = 100000
+EPOCH = 1000000
 GAMMA = 0.99
 
 NFRAMES = 4
@@ -39,47 +42,65 @@ value_net.cuda()
 opt1 = optim.Adam(policy_net.parameters(), lr=1e-3)
 opt2 = optim.Adam(value_net.parameters(), lr=1e-3)
 
+global_step = 0
 def train_step():
 
     observ_batch = []
     reward_batch = []
     action_batch = []
-    mask_batch = []
+    discount_reward_batch = []
 
     # policy_net.cpu()
     # value_net.cpu()
 
-    observ = []
-    reward = []
-    action = []
     # mask =[]
-    obs = env.reset()
-    windows = [obs.copy()]*4
-    observ.append(list_to_tensor(windows))
+    for _ in range(BATCHSIZE):
+        observ = []
+        reward = []
+        action = []
 
-    for _ in range(MAXSTEP):
-        with torch.no_grad():
-            logits = policy_net(observ[-1].unsqueeze(0).cuda())
-            dist = distributions.Categorical(logits=logits)
-            act = dist.sample().cpu()
-            action.append(act.item())
-        obs, rwd, end, _ = env.step(act.item())
-        windows.pop(0)
-        windows.append(obs.copy())
+        obs = env.reset()
+        windows = [obs.copy()]*4
         observ.append(list_to_tensor(windows))
-        reward.append(rwd)
-        if end: break
 
-    observ_batch = torch.stack(observ[:-1], dim=0).cuda()
-    reward_batch = torch.tensor(reward, dtype=torch.float32).cuda()
-    action_batch = torch.tensor(action).cuda()
+        for _ in range(MAXSTEP):
+            with torch.no_grad():
+                logits = policy_net(observ[-1].unsqueeze(0).cuda())
+                dist = distributions.Categorical(logits=logits)
+                act = dist.sample().cpu()
+                action.append(act.item())
+            obs, rwd, end, _ = env.step(act.item())
+            windows.pop(0)
+            windows.append(obs.copy())
+            observ.append(list_to_tensor(windows))
+            reward.append(rwd)
+            if end: break
+
+        # plt.imshow(np.array(obs), cmap='gray')
+        # plt.savefig("test.png")
+        # import sys; sys.exit()
+
+        with torch.no_grad():
+            observ = torch.stack(observ[:-1], dim=0).cuda()
+            reward = torch.tensor(reward, dtype=torch.float32).cuda()
+            action = torch.tensor(action).cuda()
+
+            discount_reward = reward.clone()
+            for idx in reversed(range(reward.size(0)-1)):
+                discount_reward[idx] += GAMMA*discount_reward[idx+1]
+
+        observ_batch.append(observ)
+        action_batch.append(action)
+        reward_batch.append(reward)
+        discount_reward_batch.append(discount_reward)
 
     with torch.no_grad():
-        discount_reward_batch = reward_batch.clone()
-        for idx in reversed(range(reward_batch.size(0)-1)):
-            discount_reward_batch[idx] += GAMMA*discount_reward_batch[idx+1]
-
+        observ_batch = torch.cat(observ_batch, dim=0)
+        action_batch = torch.cat(action_batch, dim=0)
+        reward_batch = torch.cat(reward_batch, dim=0)
+        discount_reward_batch = torch.cat(discount_reward_batch, dim=0)
     # print(observ_batch.shape, reward_batch.shape, action_batch.shape)
+    # import sys; sys.exit()
 
     avg_reward = reward_batch.mean()
     # print(avg_reward)
@@ -97,12 +118,20 @@ def train_step():
     # import sys; sys.exit()
     logprob = F.cross_entropy(policy_pr, action_batch, reduction='none')
     loss1 = (logprob * advantage + 0.01*(pr*pr.log()).sum(-1)).mean()
+    # loss1 = (logprob * advantage).mean()
     loss2 = (value_pr - discount_reward_batch).pow(2).mean()
     loss1.backward()
     loss2.backward()
 
     opt1.step()
     opt2.step()
+
+    global global_step
+    global_step += 1
+    writer.add_scalar("Reward", avg_reward.item(), global_step=global_step)
+    writer.add_scalar("Policy Loss", loss1.item(), global_step=global_step)
+    writer.add_scalar("Value Loss", loss2.item(), global_step=global_step)
+
     return avg_reward.item(), loss1.item(), loss2.item()
 
 if __name__ == "__main__":
