@@ -24,9 +24,9 @@ env = gym.make("Pong-v0")
 # plt.imshow(np.array(obs), cmap='gray')
 # plt.savefig("test.png")
 
-MAXSTEP = 100
+MAXSTEP = 256
 BATCHSIZE = 16
-EPOCH = 1000
+EPOCH = 100000
 GAMMA = 0.99
 
 NFRAMES = 4
@@ -36,8 +36,8 @@ value_net = ValueNet()
 
 policy_net.cuda()
 value_net.cuda()
-opt1 = optim.Adam(policy_net.parameters(), lr=1e-3)
-opt2 = optim.Adam(value_net.parameters(), lr=1e-3)
+opt1 = optim.Adam(policy_net.parameters(), lr=1e-4)
+opt2 = optim.Adam(value_net.parameters(), lr=1e-4)
 
 def train_step():
 
@@ -46,44 +46,66 @@ def train_step():
     action_batch = []
     mask_batch = []
 
-    policy_net.cpu()
-    value_net.cpu()
-    for _ in range(BATCHSIZE):
-        observ = []
-        reward = []
-        action = []
-        mask =[]
-        obs = env.reset()
-        windows = [obs.copy()]*4
+    # policy_net.cpu()
+    # value_net.cpu()
+
+    observ = []
+    reward = []
+    action = []
+    # mask =[]
+    obs = env.reset()
+    windows = [obs.copy()]*4
+    observ.append(list_to_tensor(windows))
+
+    for _ in range(MAXSTEP):
+        with torch.no_grad():
+            logits = policy_net(observ[-1].unsqueeze(0).cuda())
+            dist = distributions.Categorical(logits=logits)
+            act = dist.sample().cpu()
+            action.append(act.item())
+        obs, rwd, end, _ = env.step(act.item())
+        windows.pop(0)
+        windows.append(obs.copy())
         observ.append(list_to_tensor(windows))
+        reward.append(rwd)
+        if end: break
 
-        for _ in range(MAXSTEP):
-            with torch.no_grad():
-                logits = policy_net(observ[-1].unsqueeze(0))
-                dist = distributions.Categorical(logits=logits)
-                act = dist.sample()
-                action.append(act.item())
-            obs, rwd, end, _ = env.step(act.item())
-            windows.pop(0)
-            windows.append(obs.copy())
-            observ.append(list_to_tensor(windows))
-            reward.append(rwd)
-            mask.append(1)
-            if end: break
+    observ_batch = torch.stack(observ[:-1], dim=0).cuda()
+    reward_batch = torch.tensor(reward, dtype=torch.float32).cuda()
+    action_batch = torch.tensor(action).cuda()
 
-        observ_batch.append(torch.
-        reward_batch.append(torch.tensor(reward))
-        action_batch.append(torch.tensor(action))
-        mask_batch.append(torch.tensor(mask))
+    with torch.no_grad():
+        discount_reward_batch = reward_batch.clone()
+        for idx in reversed(range(reward_batch.size(0)-1)):
+            discount_reward_batch[idx] += GAMMA*discount_reward_batch[idx+1]
 
-        observ_batch = torch.nn.utils.rnn.pad_sequence(observ_batch, batch_first=True).cuda()
-        reward_batch = torch.nn.utils.rnn.pad_sequence(reward_batch, batch_first=True).cuda()
-        action_batch = torch.nn.utils.rnn.pad_sequence(action_batch, batch_first=True).cuda()
-        mask_batch = torch.nn.utils.rnn.pad_sequence(mask_batch, batch_first=True).cuda()
-        avg_reward = reward_batch.mean()
+    # print(observ_batch.shape, reward_batch.shape, action_batch.shape)
 
-        print(avg_reward)
+    avg_reward = reward_batch.mean()
+    # print(avg_reward)
 
+    opt1.zero_grad()
+    opt2.zero_grad()
+
+    policy_pr = policy_net(observ_batch)
+    value_pr = value_net(observ_batch)
+
+    advantage = (discount_reward_batch - value_pr).detach()
+    # print(policy_pr.shape, action_batch.shape)
+    # import sys; sys.exit()
+    logprob = F.cross_entropy(policy_pr, action_batch, reduction='none')
+    loss1 = (logprob * advantage).mean()
+    loss2 = (value_pr - discount_reward_batch).pow(2).mean()
+    loss1.backward()
+    loss2.backward()
+
+    opt1.step()
+    opt2.step()
+    return avg_reward.item(), loss1.item(), loss2.item()
 
 if __name__ == "__main__":
-    train_step()
+    for i in range(EPOCH):
+        print("Epoch: {:6d}, Avg_reward: {:12.6f}, PolicyNet Loss: {:12.6f}, ValueNet Loss: {:12.6f}".format(i+1, *train_step()), end="\r")
+
+    torch.save({"policy": policy_net.state_dict(), 
+                "value": value_net.state_dict()}, "model.pt")
