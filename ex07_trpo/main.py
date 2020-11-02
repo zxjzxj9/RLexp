@@ -36,8 +36,8 @@ value_net = ValueNet()
 
 policy_net.cuda()
 value_net.cuda()
-opt1 = optim.Adam(policy_net.parameters(), lr=1e-4)
-opt2 = optim.Adam(value_net.parameters(), lr=1e-4)
+opt1 = optim.Adam(policy_net.parameters(), lr=1e-3)
+opt2 = optim.Adam(value_net.parameters(), lr=1e-3)
 
 def train_step():
 
@@ -88,13 +88,15 @@ def train_step():
     opt2.zero_grad()
 
     policy_pr = policy_net(observ_batch)
+    pr = policy_pr.softmax(dim=-1)
     value_pr = value_net(observ_batch)
 
-    advantage = (discount_reward_batch - value_pr).detach()
+    with torch.no_grad():
+        advantage = (discount_reward_batch - value_pr).detach()
     # print(policy_pr.shape, action_batch.shape)
     # import sys; sys.exit()
     logprob = F.cross_entropy(policy_pr, action_batch, reduction='none')
-    loss1 = (logprob * advantage).mean()
+    loss1 = (logprob * advantage + 0.01*(pr*pr.log()).sum(-1)).mean()
     loss2 = (value_pr - discount_reward_batch).pow(2).mean()
     loss1.backward()
     loss2.backward()
