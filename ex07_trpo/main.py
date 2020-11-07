@@ -91,7 +91,7 @@ if __name__ == "__main__":
     print("1 epoch contains {} steps".format(EPOCHSTEP))
     NEPOCH = 100*EPOCHSTEP
     GAMMA = 0.99
-    NFRAMES = 1
+    NFRAMES = 4
 
     policy_net = PolicyNet(NFRAMES)
     policy_net.cuda()

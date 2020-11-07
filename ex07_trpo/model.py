@@ -150,6 +150,4 @@ class EnvSampler(object):
 
 
 if __name__ == "__main__":
-    pnet = ValueNet()
-    img = torch.randn(32, 4, 84, 84)
-    print(pnet(img).shape)
+    pass
