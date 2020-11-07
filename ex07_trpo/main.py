@@ -14,7 +14,6 @@ from model import PolicyNet, EnvSampler
 import torch.multiprocessing as mp
 
 from torch.utils.tensorboard import SummaryWriter
-from collections import deque
 
 mp.set_start_method('spawn', force=True)
 
@@ -97,7 +96,7 @@ if __name__ == "__main__":
     policy_net = PolicyNet(NFRAMES)
     policy_net.cuda()
     policy_net.share_memory() # make it store in shared memory
-    opt = optim.RMSprop(policy_net.parameters(), lr=1e-3, alpha=0.99, eps=1e-5)
+    opt = optim.RMSprop(policy_net.parameters(), lr=5e-4, alpha=0.99, eps=1e-5)
 
     samplers = [EnvSampler(env, policy_net, NFRAMES, MAXSTEP, GAMMA) for _ in range(NWORKERS)]
     global_step = 0
