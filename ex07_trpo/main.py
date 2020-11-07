@@ -14,6 +14,7 @@ from model import PolicyNet, EnvSampler
 import torch.multiprocessing as mp
 
 from torch.utils.tensorboard import SummaryWriter
+from collections import deque
 
 mp.set_start_method('spawn', force=True)
 

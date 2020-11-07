@@ -1,11 +1,13 @@
 #! /usr/bin/env python
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
-from torch import optim, distributions
+from torch import distributions
+from collections import deque
 
 trans = transforms.Compose([
     transforms.Resize((110, 84)),
@@ -51,7 +53,7 @@ class PolicyNet(nn.Module):
 
 class EnvSampler(object):
 
-    def __init__(self, env, pnet, nframes=4, maxstep=128, gamma=0.99):
+    def __init__(self, env, pnet, nframes=4, maxstep=6, gamma=0.99):
 
         self.env = env
         self.pnet = pnet
@@ -67,14 +69,17 @@ class EnvSampler(object):
 
     def reset(self):
         obs = self.env.reset()
-        self.windows = [obs.copy()]*self.nframes
+        # black out the initial frames
+        init_state = [np.zeros_like(obs)]*(self.nframes-1)
+        init_state.append(obs.copy())
+        self.windows = deque(init_state, maxlen=self.nframes)
 
     def sample(self):
 
-        observ_batch = []
-        reward_batch = []
-        action_batch = []
-        discount_reward_batch = []
+        # observ_batch = []
+        # reward_batch = []
+        # action_batch = []
+        # discount_reward_batch = []
         avg_reward = 0.0
         last_reward = 0.0
         end = False
@@ -82,23 +87,19 @@ class EnvSampler(object):
         observ = [list_to_tensor(self.windows)]
         action = []
         reward = []
+        # value = []
 
         for _ in range(self.maxstep):
             with torch.no_grad():
                 # print(observ[-1].shape)
                 logits, last_reward = self.pnet(observ[-1].unsqueeze(0).cuda())
+                # value.append(last_reward)
                 dist = distributions.Categorical(logits=logits)
                 act = dist.sample().cpu()
                 action.append(act.item())
 
-            # obs = None
-            # rwd = 0.0
-            # for _ in range(self.nframes):
-            #     obs, r, end, _ = self.env.step(act.item())
-            #     rwd += r
             obs, rwd, end, _ = self.env.step(act.item())
 
-            self.windows.pop(0)
             self.windows.append(obs.copy())
             observ.append(list_to_tensor(self.windows))
             reward.append(rwd)
