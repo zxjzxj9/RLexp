@@ -33,3 +33,6 @@
 
 # Python binary
 *.pyc
+
+# PyTorch checkpoints
+*.pt
