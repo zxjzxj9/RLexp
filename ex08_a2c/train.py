@@ -18,7 +18,7 @@ from collections import deque
 torch.cuda.is_available()
 print(torch.cuda.get_device_name(0))
 
-NENV = 4
+NENV = 8
 NUM_FRAMES = 4
 NSTEPS = 1000000
 
