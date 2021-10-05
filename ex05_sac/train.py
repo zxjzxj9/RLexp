@@ -155,7 +155,6 @@ class EnvWrapper(object):
     def env(self):
         return self.env_
 
-
 def train(buffer, pnet, dqn1, dqn2, optimizer):
     # 对经验回放的数据进行采样
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
@@ -171,7 +170,7 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
-        dist = Categorical(logits)
+        dist = Categorical(logits=logits)
         acts = dist.sample()
         target1 = dqn1(next_state).gather(1, acts.unsqueeze(-1))
         target2 = dqn2(next_state).gather(1, acts.unsqueeze(-1))
@@ -181,24 +180,28 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     # 当前状态的预测
     predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
     predict2 = dqn2(state).gather(1, action.unsqueeze(-1)).squeeze()
-    lossv1 = (predict1 - target).pow(2).mean()
-    lossv2 = (predict2 - target).pow(2).mean()
+    lossv1 = 0.5*(predict1 - target).pow(2).mean()
+    lossv2 = 0.5*(predict2 - target).pow(2).mean()
 
     # 损失函数的优化
     optimizer.zero_grad()
     lossv1.backward()
     lossv2.backward()
+    # torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
+    # torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
     optimizer.step()
 
-    logits = pnet(next_state)
-    dist = Categorical(logits)
+    logits = pnet(state)
+    dist = Categorical(logits=logits)
     acts = dist.sample()
     with torch.no_grad():
         predict1 = dqn1(state).gather(1, acts.unsqueeze(-1)).squeeze()
         predict2 = dqn2(state).gather(1, acts.unsqueeze(-1)).squeeze()
-    lossp = (torch.min(predict1, predict2) - REG*dist.log_prob(acts)).mean()
+    lossp = (REG*dist.log_prob(acts) - torch.min(predict1, predict2)).mean()
+    
     optimizer.zero_grad()
     lossp.backward()
+    # torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
     optimizer.step()
 
     w1new = dqn1.state_dict()
@@ -208,8 +211,7 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
         w2[k].copy_(RHO*w2[k] + (1-RHO)*w2new[k])
     dqn1.load_state_dict(w1)
     dqn2.load_state_dict(w2)
-    return lossp.item()
-
+    return lossp.cpu().item()
 
 GAMMA = 0.99
 EPSILON_MIN = 0.01
