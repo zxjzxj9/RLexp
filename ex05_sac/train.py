@@ -260,4 +260,4 @@ for nstep in range(NSTEPS):
         episode_reward = 0
 
     if len(buffer) >= 10000:
-        loss = train(buffer, dqn, optimizer)
+        loss = train(buffer, pnet, dqn1, dqn2, optimizer)
