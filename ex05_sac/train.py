@@ -171,11 +171,18 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     with torch.no_grad():
         logits = pnet(next_state)
         dist = Categorical(logits=logits)
-        acts = dist.sample()
-        target1 = dqn1(next_state).gather(1, acts.unsqueeze(-1))
-        target2 = dqn2(next_state).gather(1, acts.unsqueeze(-1))
-        target = reward + (1-done)*GAMMA*(torch.min(target1, target2)
-            - REG*dist.log_prob(acts))
+        # acts = dist.sample()
+        # target1 = dqn1(next_state).gather(1, acts.unsqueeze(-1))
+        # target2 = dqn2(next_state).gather(1, acts.unsqueeze(-1))
+        target1 = dqn1(next_state)
+        target2 = dqn2(next_state)
+        # print(torch.min(target1, target2).shape)
+        # print(logits.softmax(-1).shape)
+        # print(reward.shape)
+        # print(dist.entropy().shape)
+        target = reward + (1-done)*GAMMA*(
+            (torch.min(target1, target2)*logits.softmax(-1)).sum(-1)
+            - REG*dist.entropy())
 
     # 当前状态的预测
     predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
@@ -187,21 +194,22 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     optimizer.zero_grad()
     lossv1.backward()
     lossv2.backward()
-    # torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
-    # torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
+    torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
+    torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
     optimizer.step()
 
     logits = pnet(state)
     dist = Categorical(logits=logits)
-    acts = dist.sample()
+    # acts = dist.sample()
     with torch.no_grad():
-        predict1 = dqn1(state).gather(1, acts.unsqueeze(-1)).squeeze()
-        predict2 = dqn2(state).gather(1, acts.unsqueeze(-1)).squeeze()
-    lossp = (REG*dist.log_prob(acts) - torch.min(predict1, predict2)).mean()
+        predict1 = dqn1(state)
+        predict2 = dqn2(state)
+    predict = (torch.min(predict1, predict2)*logits.softmax(-1)).sum(-1)
+    lossp = (REG*dist.entropy() - predict).mean()
     
     optimizer.zero_grad()
     lossp.backward()
-    # torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
+    torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
     optimizer.step()
 
     w1new = dqn1.state_dict()
