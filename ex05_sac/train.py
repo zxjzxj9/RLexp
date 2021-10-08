@@ -9,17 +9,14 @@ import numpy as np
 import gym
 from PIL import Image
 
-# DQN深度模型，用来估计Atari环境的Q函数
 class DQN(nn.Module):
 
     def __init__(self, img_size, num_actions):
         super().__init__()
 
-        # 输入图像的形状(c, h, w)
         self.img_size = img_size
         self.num_actions = num_actions
 
-        # 对于Atari环境，输入为(4, 84, 84)
         self.featnet = nn.Sequential(
             nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -29,7 +26,6 @@ class DQN(nn.Module):
             nn.ReLU()
         )
 
-        # 价值网络，根据特征输出每个动作的价值
         self.vnet = nn.Sequential(
             nn.Linear(self._feat_size(), 512),
             nn.ReLU(),
@@ -45,15 +41,12 @@ class DQN(nn.Module):
     def forward(self, x):        
         bs = x.size(0)
 
-        # 提取特征
         feat = self.featnet(x).view(bs, -1)
         
-        # 获取所有可能动作的价值
         values = self.vnet(feat)
         return values
 
     def act(self, x, epsilon=0.0):
-        # ε-贪心算法
         if random.random() > epsilon:
             with torch.no_grad():
                 values = self.forward(x)
@@ -61,17 +54,14 @@ class DQN(nn.Module):
         else:
             return random.randint(0, self.num_actions-1)
 
-# 策略网络，用于根据状态生成策略
 class PolicyNet(nn.Module):
 
     def __init__(self, img_size, num_actions):
         super().__init__()
 
-        # 输入图像的形状(c, h, w)
         self.img_size = img_size
         self.num_actions = num_actions
 
-        # 对于Atari环境，输入为(4, 84, 84)
         self.featnet = nn.Sequential(
             nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -81,7 +71,6 @@ class PolicyNet(nn.Module):
             nn.ReLU(),
         )
 
-        # 策略网络，计算每个动作的概率
         self.pnet = nn.Sequential(
             nn.Linear(self._feat_size(), 512),
             nn.ReLU(),
@@ -134,7 +123,6 @@ class EnvWrapper(object):
         self.frame = deque(maxlen=num_frames)
 
     def _preprocess(self, img):
-        # 预处理数据
         img = Image.fromarray(img)
         img = img.convert("L")
         img = img.resize((84, 84))
@@ -156,7 +144,6 @@ class EnvWrapper(object):
         return self.env_
 
 def train(buffer, pnet, dqn1, dqn2, optimizer):
-    # 对经验回放的数据进行采样
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
     state = torch.tensor(state, dtype=torch.float32).cuda()
     reward = torch.tensor(reward, dtype=torch.float32).cuda()
@@ -167,7 +154,6 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     w1 = dqn1.state_dict()
     w2 = dqn2.state_dict()
 
-    # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
         dist = Categorical(logits=logits)
@@ -184,13 +170,11 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
             (torch.min(target1, target2)*logits.softmax(-1)).sum(-1)
             - REG*dist.entropy())
 
-    # 当前状态的预测
     predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
     predict2 = dqn2(state).gather(1, action.unsqueeze(-1)).squeeze()
     lossv1 = 0.5*(predict1 - target).pow(2).mean()
     lossv2 = 0.5*(predict2 - target).pow(2).mean()
 
-    # 损失函数的优化
     optimizer.zero_grad()
     lossv1.backward()
     lossv2.backward()
