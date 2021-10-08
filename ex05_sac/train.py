@@ -204,8 +204,8 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     with torch.no_grad():
         predict1 = dqn1(state)
         predict2 = dqn2(state)
-    predict = (torch.min(predict1, predict2)*logits.softmax(-1)).sum(-1)
-    lossp = (REG*dist.entropy() - predict).mean()
+        predict = REG*logits.log_softmax() - torch.min(predict1, predict2)
+    lossp = (predict*logits.softmax(-1)).sum(-1)
     
     optimizer.zero_grad()
     lossp.backward()
