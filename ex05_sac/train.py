@@ -206,8 +206,6 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     return lossp.cpu().item()
 
 GAMMA = 0.99
-EPSILON_MIN = 0.01
-EPSILON_MAX = 1.00
 NFRAMES = 4
 BATCH_SIZE = 32
 NSTEPS = 4000000
