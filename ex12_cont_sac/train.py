@@ -54,44 +54,43 @@ class DQN(nn.Module):
         else:
             return random.randint(0, self.num_actions-1)
 
+
 class PolicyNet(nn.Module):
 
-    def __init__(self, img_size, num_actions):
+    def __init__(self, state_dim, act_dim, act_min, act_max):
         super().__init__()
 
-        self.img_size = img_size
-        self.num_actions = num_actions
+        self.state_dim = state_dim
+        self.act_dim = act_dim
 
-        self.featnet = nn.Sequential(
-            nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
+        self.feat_net = nn.Sequential(
+            nn.Linear(state_dim, 256),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
-            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU()
         )
 
-        self.pnet = nn.Sequential(
-            nn.Linear(self._feat_size(), 512),
-            nn.ReLU(),
-            nn.Linear(512, self.num_actions)
-        )
+        self.pnet_mu = nn.Linear(256, act_dim)
+        # self.pnet_logs = nn.Linear(256, act_dim)
+        self.pnet_logs = nn.Parameter(torch.zeros(act_dim))
 
-    def _feat_size(self):
-        with torch.no_grad():
-            x = torch.randn(1, *self.img_size)
-            x = self.featnet(x).view(1, -1)
-        return x.size(1)
+        self.act_min = act_min
+        self.act_max = act_max
 
     def forward(self, x):
-        feat = self.featnet(x).view(x.size(0), -1)
-        return self.pnet(feat)
+        feat = self.feat_net(x)
+        mu = 2.0*self.pnet_mu(feat).tanh()
+        # sigma = (F.softplus(self.pnet_logs(feat)) + 1e-4).sqrt()
+        sigma = (F.softplus(self.pnet_logs) + 1e-4).sqrt()
+        return mu, sigma
 
     def act(self, x):
         with torch.no_grad():
-            logits = self(x)
-            actions = Categorical(logits=logits).sample().squeeze()
-        return actions
+            mu, sigma = self(x)
+            dist = Normal(mu, sigma)
+            return dist.sample()\
+                .clamp(self.act_min, self.act_max)\
+                .squeeze().cpu().item()
 
 
 from collections import deque
@@ -239,7 +238,7 @@ episode_reward = 0
 for nstep in range(NSTEPS):
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).cuda()
     action = pnet.act(state_t)
-    next_state, reward, done, _ = env.step(action)
+    next_state, reward, done, _ = env.step((action, ))
     buffer.push(state, action, reward, next_state, done)
     state = next_state
     episode_reward += reward
