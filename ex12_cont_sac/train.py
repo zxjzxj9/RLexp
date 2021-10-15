@@ -11,48 +11,27 @@ from PIL import Image
 
 class DQN(nn.Module):
 
-    def __init__(self, img_size, num_actions):
+    def __init__(self, state_dim, act_dim):
         super().__init__()
 
-        self.img_size = img_size
-        self.num_actions = num_actions
-
-        self.featnet = nn.Sequential(
-            nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
+        self.feat_net = nn.Sequential(
+            nn.Linear(state_dim, 256),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.Linear(256, 256),
             nn.ReLU()
         )
 
-        self.vnet = nn.Sequential(
-            nn.Linear(self._feat_size(), 512),
-            nn.ReLU(),
-            nn.Linear(512, self.num_actions)
-        )
+        self.vnet = nn.Linear(256, 1)
 
-    def _feat_size(self):
+    def forward(self, x):
+        feat = self.feat_net(x)
+        value = self.vnet(feat)
+        return value
+
+    def val(self, x):
         with torch.no_grad():
-            x = torch.randn(1, *self.img_size)
-            x = self.featnet(x).view(1, -1)
-        return x.size(1)
-
-    def forward(self, x):        
-        bs = x.size(0)
-
-        feat = self.featnet(x).view(bs, -1)
-        
-        values = self.vnet(feat)
-        return values
-
-    def act(self, x, epsilon=0.0):
-        if random.random() > epsilon:
-            with torch.no_grad():
-                values = self.forward(x)
-            return values.argmax(-1).squeeze().item()
-        else:
-            return random.randint(0, self.num_actions-1)
+            value = self(x)
+            return value.squeeze().cpu().item()
 
 
 class PolicyNet(nn.Module):
