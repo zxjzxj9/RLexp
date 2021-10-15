@@ -272,27 +272,15 @@ optimizer = torch.optim.Adam([
     {'params': vnet.parameters(), 'lr': 1e-4},
 ])
 
-# optimizer = torch.optim.RMSprop([
-#     {'params': pnet.parameters(), 'lr': 3e-4, 'alpha': 0.99, 'eps': 1e-5},
-#     {'params': vnet.parameters(), 'lr': 3e-4, 'alpha': 0.99, 'eps': 1e-5},
-# ])
-
 all_rewards = []
 all_losses = []
 all_values = []
 episode_reward = 0
 loss = 0.0
 
-episode_reward = 0
-loss = 0.0
-
 state = env.reset()
 
-# for g in optimizer.param_groups:
-#    g["lr"] = 3e-4
-
-for nstep in tqdm.tqdm(range(NSTEPS)):
-#for nstep in range(NSTEPS):
+for nstep in range(NSTEPS):
 
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).cuda()
     action = pnet.act(state_t)
