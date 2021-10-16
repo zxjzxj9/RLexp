@@ -15,7 +15,7 @@ class DQN(nn.Module):
         super().__init__()
 
         self.feat_net = nn.Sequential(
-            nn.Linear(state_dim, 256),
+            nn.Linear(state_dim + act_dim, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU()
@@ -23,14 +23,15 @@ class DQN(nn.Module):
 
         self.vnet = nn.Linear(256, 1)
 
-    def forward(self, x):
+    def forward(self, state, action):
+        x = torch.cat([state, action], -1)
         feat = self.feat_net(x)
         value = self.vnet(feat)
         return value
 
-    def val(self, x):
+    def val(self, state, action):
         with torch.no_grad():
-            value = self(x)
+            value = self(state, action)
             return value.squeeze().cpu().item()
 
 
