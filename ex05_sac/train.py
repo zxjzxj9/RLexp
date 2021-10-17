@@ -144,6 +144,7 @@ class EnvWrapper(object):
         return self.env_
 
 def train(buffer, pnet, dqn1, dqn2, optimizer):
+    # 对经验回放的数据进行采样
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
     state = torch.tensor(state, dtype=torch.float32).cuda()
     reward = torch.tensor(reward, dtype=torch.float32).cuda()
@@ -154,6 +155,7 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     w1 = dqn1.state_dict()
     w2 = dqn2.state_dict()
 
+    # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
         dist = Categorical(logits=logits)
@@ -170,11 +172,13 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
             (torch.min(target1, target2)*logits.softmax(-1)).sum(-1)
             - REG*dist.entropy())
 
+    # 当前状态的预测
     predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
     predict2 = dqn2(state).gather(1, action.unsqueeze(-1)).squeeze()
     lossv1 = 0.5*(predict1 - target).pow(2).mean()
     lossv2 = 0.5*(predict2 - target).pow(2).mean()
 
+    # 损失函数的优化
     optimizer.zero_grad()
     lossv1.backward()
     lossv2.backward()
@@ -188,8 +192,8 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     with torch.no_grad():
         predict1 = dqn1(state)
         predict2 = dqn2(state)
-        predict = REG*logits.log_softmax() - torch.min(predict1, predict2)
-    lossp = (predict*logits.softmax(-1)).sum(-1)
+        predict = (REG*logits.log_softmax(-1) - torch.min(predict1, predict2))
+    lossp = (predict*logits.softmax(-1)).sum(-1).mean()
     
     optimizer.zero_grad()
     lossp.backward()
@@ -204,7 +208,6 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     dqn1.load_state_dict(w1)
     dqn2.load_state_dict(w2)
     return lossp.cpu().item()
-
 GAMMA = 0.99
 NFRAMES = 4
 BATCH_SIZE = 32
