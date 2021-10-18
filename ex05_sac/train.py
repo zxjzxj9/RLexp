@@ -158,45 +158,36 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
-        dist = Categorical(logits=logits)
-        # acts = dist.sample()
-        # target1 = dqn1(next_state).gather(1, acts.unsqueeze(-1))
-        # target2 = dqn2(next_state).gather(1, acts.unsqueeze(-1))
+        probs = logits.softmax(-1)
         target1 = dqn1(next_state)
         target2 = dqn2(next_state)
-        # print(torch.min(target1, target2).shape)
-        # print(logits.softmax(-1).shape)
-        # print(reward.shape)
-        # print(dist.entropy().shape)
-        target = reward + (1-done)*GAMMA*(
-            (torch.min(target1, target2)*logits.softmax(-1)).sum(-1)
-            - REG*dist.entropy())
-
+        target = (torch.min(target1, target2)*probs).sum(-1)
+        # print(target.shape)
+        target = reward + (1-done)*GAMMA*\
+            (target - REG*(probs*logits.log_softmax(-1)).sum(-1))
+    # print(probs)
+    # print(target, target.shape)
     # 当前状态的预测
     predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
     predict2 = dqn2(state).gather(1, action.unsqueeze(-1)).squeeze()
     lossv1 = 0.5*(predict1 - target).pow(2).mean()
     lossv2 = 0.5*(predict2 - target).pow(2).mean()
 
-    # 损失函数的优化
-    optimizer.zero_grad()
-    lossv1.backward()
-    lossv2.backward()
-    torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
-    torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
-    optimizer.step()
-
     logits = pnet(state)
-    dist = Categorical(logits=logits)
-    # acts = dist.sample()
+    probs = logits.softmax(-1)
     with torch.no_grad():
         predict1 = dqn1(state)
         predict2 = dqn2(state)
-        predict = (REG*logits.log_softmax(-1) - torch.min(predict1, predict2))
-    lossp = (predict*logits.softmax(-1)).sum(-1).mean()
+    target = (torch.min(predict1, predict2)*probs).sum(-1).mean()
+    entropy = -(probs*logits.log_softmax(-1)).sum(-1).mean()
+    lossp = -REG*entropy - target
     
     optimizer.zero_grad()
+    lossv1.backward()
+    lossv2.backward()
     lossp.backward()
+    torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
+    torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
     torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
     optimizer.step()
 
@@ -208,6 +199,8 @@ def train(buffer, pnet, dqn1, dqn2, optimizer):
     dqn1.load_state_dict(w1)
     dqn2.load_state_dict(w2)
     return lossp.cpu().item()
+
+
 GAMMA = 0.99
 NFRAMES = 4
 BATCH_SIZE = 32
