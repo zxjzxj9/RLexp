@@ -10,27 +10,37 @@ import gym
 from PIL import Image
 
 class DQN(nn.Module):
-
     def __init__(self, img_size, num_actions):
         super().__init__()
 
+        # 输入图像的形状(c, h, w)
         self.img_size = img_size
         self.num_actions = num_actions
 
+        # 对于Atari环境，输入为(4, 84, 84)
         self.featnet = nn.Sequential(
             nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Flatten()
         )
 
-        self.vnet = nn.Sequential(
+        gain = nn.init.calculate_gain('relu')  
+        self.vnet1 = nn.Sequential(
             nn.Linear(self._feat_size(), 512),
-            nn.ReLU(),
-            nn.Linear(512, self.num_actions)
+            nn.ReLU()
         )
+        self._init(self.featnet, gain)
+        self._init(self.vnet1, gain)
+
+        # 价值网络，根据特征输出每个动作的价值
+        gain = 1.0
+        self.vnet2 = nn.Linear(512, num_actions)
+        self._init(self.vnet2, gain)
+        
 
     def _feat_size(self):
         with torch.no_grad():
@@ -38,30 +48,29 @@ class DQN(nn.Module):
             x = self.featnet(x).view(1, -1)
         return x.size(1)
 
-    def forward(self, x):        
-        bs = x.size(0)
+    def _init(self, mod, gain):
+        for m in mod.modules():
+            if isinstance(m, (nn.Linear, nn.Conv2d)):
+                nn.init.xavier_normal_(m.weight, gain=gain)
+                nn.init.zeros_(m.bias)
 
-        feat = self.featnet(x).view(bs, -1)
-        
-        values = self.vnet(feat)
-        return values
+    def forward(self, x):
+        feat = self.featnet(x)
+        feat = self.vnet1(feat)
+        return self.vnet2(feat).squeeze(-1)#.clamp(-10, 10)
 
-    def act(self, x, epsilon=0.0):
-        if random.random() > epsilon:
-            with torch.no_grad():
-                values = self.forward(x)
-            return values.argmax(-1).squeeze().item()
-        else:
-            return random.randint(0, self.num_actions-1)
 
+# 策略网络，用于根据状态生成策略
 class PolicyNet(nn.Module):
 
     def __init__(self, img_size, num_actions):
         super().__init__()
 
+        # 输入图像的形状(c, h, w)
         self.img_size = img_size
         self.num_actions = num_actions
 
+        # 对于Atari环境，输入为(4, 84, 84)
         self.featnet = nn.Sequential(
             nn.Conv2d(img_size[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -69,13 +78,24 @@ class PolicyNet(nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
+            nn.Flatten(),
         )
 
-        self.pnet = nn.Sequential(
+        self.log_alpha = nn.Parameter(torch.tensor([0.0]))
+        self.target_entropy = -0.98*np.log(1.0/num_actions)
+
+        gain = nn.init.calculate_gain('relu')
+        self.pnet1 = nn.Sequential(
             nn.Linear(self._feat_size(), 512),
             nn.ReLU(),
-            nn.Linear(512, self.num_actions)
         )
+        self._init(self.featnet, gain)
+        self._init(self.pnet1, gain)
+        
+        # 策略网络，计算每个动作的概率
+        gain = 1.0
+        self.pnet2 = nn.Linear(512, self.num_actions)
+        self._init(self.pnet2, gain)
 
     def _feat_size(self):
         with torch.no_grad():
@@ -83,16 +103,37 @@ class PolicyNet(nn.Module):
             x = self.featnet(x).view(1, -1)
         return x.size(1)
 
+    def _init(self, mod, gain):
+        for m in mod.modules():
+            if isinstance(m, (nn.Linear, nn.Conv2d)):
+                nn.init.xavier_normal_(m.weight, gain=gain)
+                nn.init.zeros_(m.bias)
+
     def forward(self, x):
-        feat = self.featnet(x).view(x.size(0), -1)
-        return self.pnet(feat)
+        feat = self.featnet(x)
+        feat = self.pnet1(feat)
+        return self.pnet2(feat)
 
     def act(self, x):
         with torch.no_grad():
             logits = self(x)
-            actions = Categorical(logits=logits).sample().squeeze()
-        return actions
+            m = Categorical(logits=logits).sample().squeeze()
+        return m.cpu().item()
 
+class TwinnedQNetwork(nn.Module):
+    def __init__(self, img_size, num_actions):
+        super().__init__()
+        self.dqn1 = DQN(img_size, num_actions)
+        self.dqn2 = DQN(img_size, num_actions)
+
+    def update(self, other, rho=0.995):
+        param1 = self.state_dict()
+        param2 = other.state_dict()
+
+        for k in param1.keys():
+            param1[k].copy_(rho*param1[k] + (1-rho)*param2[k])
+
+        self.load_state_dict(param1)
 
 from collections import deque
 class ExpReplayBuffer(object):
