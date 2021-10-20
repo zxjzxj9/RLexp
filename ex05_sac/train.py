@@ -184,63 +184,62 @@ class EnvWrapper(object):
     def env(self):
         return self.env_
 
-def train(buffer, pnet, dqn1, dqn2, optimizer):
+def train(buffer, pnet, localnet, targetnet, optimizer):
     # 对经验回放的数据进行采样
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
     state = torch.tensor(state, dtype=torch.float32).cuda()
     reward = torch.tensor(reward, dtype=torch.float32).cuda()
-    action = torch.tensor(action, dtype=torch.long).cuda()
+    action = torch.tensor(action, dtype=torch.long).unsqueeze(-1).cuda()
     next_state = torch.tensor(next_state, dtype=torch.float32).cuda()
     done = torch.tensor(done, dtype=torch.float32).cuda()
 
-    w1 = dqn1.state_dict()
-    w2 = dqn2.state_dict()
+    with torch.no_grad():
+        alpha = pnet.log_alpha.exp()
+    # alpha = REG
 
     # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
-        probs = logits.softmax(-1)
-        target1 = dqn1(next_state)
-        target2 = dqn2(next_state)
-        target = (torch.min(target1, target2)*probs).sum(-1)
-        # print(target.shape)
-        target = reward + (1-done)*GAMMA*\
-            (target - REG*(probs*logits.log_softmax(-1)).sum(-1))
+        probs = logits.softmax(-1).clamp(0.001, 0.999)
+        target1 = targetnet.dqn1(next_state)
+        target2 = targetnet.dqn2(next_state)
+        qmin = torch.min(target1, target2)
+        qval = ((qmin - alpha*probs.log())*probs).sum(-1)
+        target = reward + (1-done)*GAMMA*qval
+
     # print(probs)
     # print(target, target.shape)
     # 当前状态的预测
-    predict1 = dqn1(state).gather(1, action.unsqueeze(-1)).squeeze()
-    predict2 = dqn2(state).gather(1, action.unsqueeze(-1)).squeeze()
-    lossv1 = 0.5*(predict1 - target).pow(2).mean()
-    lossv2 = 0.5*(predict2 - target).pow(2).mean()
+    predict1 = localnet.dqn1(state)
+    predict2 = localnet.dqn2(state)
+    lossv1 = 0.5*(predict1.gather(1, action).squeeze() - target).pow(2).mean()
+    lossv2 = 0.5*(predict2.gather(1, action).squeeze() - target).pow(2).mean()
+    # print(predict1)
+    # print(action.squeeze())
+    # print(predict1.gather(1, action).squeeze())
 
     logits = pnet(state)
-    probs = logits.softmax(-1)
-    with torch.no_grad():
-        predict1 = dqn1(state)
-        predict2 = dqn2(state)
-    target = (torch.min(predict1, predict2)*probs).sum(-1).mean()
-    entropy = -(probs*logits.log_softmax(-1)).sum(-1).mean()
-    lossp = -REG*entropy - target
+    probs = logits.softmax(-1).clamp(0.001, 0.999)
+    predict1 = predict1.detach()
+    predict2 = predict2.detach()
+    qmin = torch.min(predict1, predict2)
+    target = (qmin*probs).sum(-1).mean()
+    entropy = -(probs*probs.log()).sum(-1).mean()
+    lossp = -alpha*entropy - target
+    lossa = -pnet.log_alpha*(pnet.target_entropy - entropy.detach())
     
     optimizer.zero_grad()
     lossv1.backward()
     lossv2.backward()
     lossp.backward()
-    torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
-    torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
-    torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
+    lossa.backward()
+    # torch.nn.utils.clip_grad_norm_(dqn1.parameters(), 0.5)
+    # torch.nn.utils.clip_grad_norm_(dqn2.parameters(), 0.5)
+    # torch.nn.utils.clip_grad_norm_(pnet.parameters(), 0.5)
     optimizer.step()
 
-    w1new = dqn1.state_dict()
-    w2new = dqn2.state_dict()
-    for k in w1.keys():
-        w1[k].copy_(RHO*w1[k] + (1-RHO)*w1new[k])
-        w2[k].copy_(RHO*w2[k] + (1-RHO)*w2new[k])
-    dqn1.load_state_dict(w1)
-    dqn2.load_state_dict(w2)
-    return lossp.cpu().item()
-
+    # targetnet.update(localnet, RHO)
+    return entropy.cpu().item(), alpha.cpu().item() #lossp.cpu().item()
 
 GAMMA = 0.99
 NFRAMES = 4
