@@ -184,6 +184,7 @@ class EnvWrapper(object):
     def env(self):
         return self.env_
 
+
 def train(buffer, pnet, localnet, targetnet, optimizer):
     # 对经验回放的数据进行采样
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
@@ -194,13 +195,13 @@ def train(buffer, pnet, localnet, targetnet, optimizer):
     done = torch.tensor(done, dtype=torch.float32).cuda()
 
     with torch.no_grad():
-        alpha = pnet.log_alpha.exp()
+        alpha = pnet.log_alpha.exp().clamp(0.0, 1.0)
     # alpha = REG
 
     # 下一步状态的预测
     with torch.no_grad():
         logits = pnet(next_state)
-        probs = logits.softmax(-1).clamp(0.001, 0.999)
+        probs = logits.softmax(-1)
         target1 = targetnet.dqn1(next_state)
         target2 = targetnet.dqn2(next_state)
         qmin = torch.min(target1, target2)
@@ -219,14 +220,14 @@ def train(buffer, pnet, localnet, targetnet, optimizer):
     # print(predict1.gather(1, action).squeeze())
 
     logits = pnet(state)
-    probs = logits.softmax(-1).clamp(0.001, 0.999)
+    probs = logits.softmax(-1)
     predict1 = predict1.detach()
     predict2 = predict2.detach()
     qmin = torch.min(predict1, predict2)
     target = (qmin*probs).sum(-1).mean()
-    entropy = -(probs*probs.log()).sum(-1).mean()
+    entropy = -(probs*probs.log()).sum(-1) #.mean()
     lossp = -alpha*entropy - target
-    lossa = -pnet.log_alpha*(pnet.target_entropy - entropy.detach())
+    lossa = -torch.mean(pnet.log_alpha*(pnet.target_entropy - entropy.detach()))
     
     optimizer.zero_grad()
     lossv1.backward()
@@ -239,7 +240,7 @@ def train(buffer, pnet, localnet, targetnet, optimizer):
     optimizer.step()
 
     # targetnet.update(localnet, RHO)
-    return entropy.cpu().item(), alpha.cpu().item() #lossp.cpu().item()
+    return entropy.mean().cpu().item(), alpha.cpu().item() #lossp.cpu().item()
 
 GAMMA = 0.99
 NFRAMES = 4
