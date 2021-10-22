@@ -247,9 +247,9 @@ NFRAMES = 4
 BATCH_SIZE = 32
 NSTEPS = 4000000
 NBUFFER = 100000
-RHO = 0.995
-REG = 0.02
-env = gym.make('PongDeterministic-v4')
+# RHO = 0.995
+# REG = 0.02
+env = gym.make('QbertDeterministic-v4')
 env = EnvWrapper(env, NFRAMES)
 
 # print(env.reset().shape)
@@ -286,5 +286,8 @@ for nstep in range(NSTEPS):
         all_rewards.append(episode_reward)
         episode_reward = 0
 
-    if len(buffer) >= 10000:
-        loss = train(buffer, pnet, dqn1, dqn2, optimizer)
+    if len(buffer) >= 20000 and nstep%NUPDATE == 0:
+        loss, alpha = train(buffer, pnet, localnet, targetnet, optimizer)
+
+    if nstep%TUPDATE == 0:
+        targetnet.load_state_dict(localnet.state_dict())
