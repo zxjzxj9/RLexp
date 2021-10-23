@@ -272,19 +272,22 @@ optimizer = torch.optim.Adam([
 all_rewards = []
 all_losses = []
 episode_reward = 0
-
+ep_len = 0
 for nstep in range(NSTEPS):
     state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).cuda()
     action = pnet.act(state_t)
     next_state, reward, done, _ = env.step(action)
+    if ep_len == env.env._max_episode_steps:
+        done = False
     buffer.push(state, action, reward, next_state, done)
     state = next_state
     episode_reward += reward
 
-    if done:
+    if done or ep_len == env.env._max_episode_steps:
         state = env.reset()
         all_rewards.append(episode_reward)
         episode_reward = 0
+        ep_len = 0
 
     if len(buffer) >= 20000 and nstep%NUPDATE == 0:
         loss, alpha = train(buffer, pnet, localnet, targetnet, optimizer)
