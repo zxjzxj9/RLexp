@@ -92,7 +92,6 @@ class PolicyNet(nn.Module):
         self._init(self.featnet, gain)
         self._init(self.pnet1, gain)
         
-        # 策略网络，计算每个动作的概率
         gain = 1.0
         self.pnet2 = nn.Linear(512, self.num_actions)
         self._init(self.pnet2, gain)
@@ -289,8 +288,8 @@ for nstep in range(NSTEPS):
         episode_reward = 0
         ep_len = 0
 
-    if len(buffer) >= 20000 and nstep%NUPDATE == 0:
+    if len(buffer) >= 20000 and (nstep + 1)%NUPDATE == 0:
         loss, alpha = train(buffer, pnet, localnet, targetnet, optimizer)
 
-    if nstep%TUPDATE == 0:
+    if (nstep + 1)%TUPDATE == 0:
         targetnet.load_state_dict(localnet.state_dict())
