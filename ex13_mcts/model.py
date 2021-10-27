@@ -5,18 +5,17 @@ import torch.nn as nn
 
 
 class PVNet(nn.Module):
-    def __init__(self, in_chan, mid_chan, out_chan):
+    def __init__(self, h, w, channs, nactions):
         super().__init__()
 
-        mods = [nn.Conv2d(in_chan, mid_chan[0], 3, 1), nn.ReLU(inplace=True)]
-        for cin, cout in zip(min_chan[:-1], [1:]):
+        mods = []
+        for cin, cout in zip(channs[:-1], channs[1:]):
             mods.append(nn.Conv2d(cin, cout, 3, 1)
             mods.append(nn.ReLU(inplace=True))
-        mods.append(nn.Conv2d(mid_chan[-1], out_chan, 3, 1))
-        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Flatten())
         self.featnet = nn.Sequential(*mods) 
-        self.policy = None
-        self.value = None
+        self.policy = nn.Linear(h*w*nchanns[-1], nactions)
+        self.value = nn.Linear(h*w*nchanns[-1], 1)
 
     def forward(self, x, mask):
         pass
