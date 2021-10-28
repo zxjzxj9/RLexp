@@ -14,9 +14,17 @@ class PVNet(nn.Module):
             mods.append(nn.ReLU(inplace=True))
         mods.append(nn.Flatten())
         self.featnet = nn.Sequential(*mods) 
-        self.policy = nn.Linear(h*w*nchanns[-1], nactions)
-        self.value = nn.Linear(h*w*nchanns[-1], 1)
+        self.pnet = nn.Linear(h*w*nchanns[-1], nactions)
+        self.vnet = nn.Linear(h*w*nchanns[-1], 1)
 
-    def forward(self, x, mask):
-        pass
+    def forward(self, x, mask=None):
+        bs = x.size(0)
+        feat = self.featnet(x).view(bs, -1)
+        action = self.pnet(feat)
+        value = self.vnet(feat)
 
+        return action, value
+
+
+if __name__ == "__main__":
+    pass
