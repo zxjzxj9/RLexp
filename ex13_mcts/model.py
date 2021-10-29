@@ -20,11 +20,11 @@ class PVNet(nn.Module):
     def forward(self, x, mask=None):
         bs = x.size(0)
         feat = self.featnet(x).view(bs, -1)
-        action = self.pnet(feat)
+        logits = self.pnet(feat)
+        if mask is not None:
+            logits[mask] = -float('inf')
         value = self.vnet(feat)
-
-        return action, value
-
+        return logits, value
 
 if __name__ == "__main__":
     pass
