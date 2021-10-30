@@ -5,12 +5,12 @@ import torch.nn as nn
 
 
 class PVNet(nn.Module):
-    def __init__(self, h, w, channs, nactions):
+    def __init__(self, h, w, nchanns, nactions):
         super().__init__()
 
         mods = []
-        for cin, cout in zip(channs[:-1], channs[1:]):
-            mods.append(nn.Conv2d(cin, cout, 3, 1)
+        for cin, cout in zip(nchanns[:-1], nchanns[1:]):
+            mods.append(nn.Conv2d(cin, cout, 3, 1))
             mods.append(nn.ReLU(inplace=True))
         mods.append(nn.Flatten())
         self.featnet = nn.Sequential(*mods) 
@@ -27,4 +27,6 @@ class PVNet(nn.Module):
         return logits, value
 
 if __name__ == "__main__":
-    pass
+    pvnet = PVNet(3, 3, [3, 8, 16], 2)
+    img = torch.zeros(16, 3, 8, 8)
+    print(pvnet(img))
