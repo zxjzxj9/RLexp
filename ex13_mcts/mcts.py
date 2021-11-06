@@ -26,7 +26,20 @@ class MCTSBot(pyspiel.Bot):
                 current_node.children = [
                      SearchNode(action, player, prior) for action, prior in legal_actions
                 ]
-                
+            if working_state.is_chance_node():
+                outcomes = working_state.chance_outcomes()
+                action_list, prob_list = zip(*outcomes)
+                action = self._random_state.choice(action_list, p=prob_list)
+                chosen_child = next(c for c in current_node.children if c.action == action)
+            else:
+                chosen_child = max(
+                    current_node.children,
+                    key=lambda c: self._child_selection_fn(
+                    c, current_node.explore_count, self.uct_c))
+            working_state.apply_action(chosen_child.action)
+            current_node = chosen_child
+            visit_path.append(current_node)
+        return visit_path, working_state
 
     def mcts_search(self, state):
         root_player = state.current_player()
