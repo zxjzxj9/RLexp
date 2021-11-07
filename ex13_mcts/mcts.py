@@ -53,3 +53,36 @@ class MCTSBot(pyspiel.Bot):
             else:
                 returns = self.evaluator.evaluate(working_state)
                 solved = False
+
+            for node in reversed(visit_path):
+                node.total_reward += returns[root_player if node.player ==
+                    pyspiel.PlayerId.CHANCE else node.player]
+                node.explore_count += 1
+
+            if solved and node.children:
+                player = node.children[0].player
+                if player == pyspiel.PlayerId.CHANCE:
+                    outcome = node.children[0].outcome
+                    if (outcome is not None and
+                        all(np.array_equal(c.outcome, outcome) for c in node.children)):
+                        node.outcome = outcome
+                    else:
+                        solved = False
+                else:
+                    best = None
+                    all_solved = True
+
+                    for child in node.children:
+                        if child.outcome is None:
+                            all_solved = False
+                        elif best is None or child.outcome[player] > best.outcome[player]:
+                            best = child
+                    if (best is not None and
+                        (all_solved or best.outcome[player] == self.max_utility)):
+                        node.outcome = best.outcome
+                    else:
+                        solved = False
+
+            if root.outcome is not None:
+                break
+        return root
