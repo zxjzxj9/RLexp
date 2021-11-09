@@ -23,27 +23,15 @@ class PolicyNet(nn.Module):
         self.act_dim = act_dim
 
         self.featnet = nn.Sequential(
-            nn.Linear(state_dim, 64),
+            nn.Linear(state_dim, 256),
             nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(256, 256),
             nn.ReLU(),
         )
 
-        self.pnet_mu = nn.Linear(64, act_dim)
-        self.pnet_logs = nn.Linear(64, act_dim)
+        self.pnet_mu = nn.Linear(256, act_dim)
+        self.pnet_logs = nn.Linear(256, act_dim)
 
-        self.pnet_mu.weight.data.uniform_(-init_w, init_w)
-        self.pnet_mu.bias.data.uniform_(-init_w, init_w)
-
-        self.pnet_logs.weight.data.uniform_(-init_w, init_w)
-        self.pnet_logs.bias.data.uniform_(-init_w, init_w)
-    
     def forward(self, x):
         feat = self.featnet(x)
         mu = self.pnet_mu(feat)
@@ -62,19 +50,13 @@ class DQN(nn.Module):
         super().__init__()
 
         self.featnet = nn.Sequential(
-            nn.Linear(state_dim + act_dim , 64),
+            nn.Linear(state_dim + act_dim, 256),
             nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(256, 256),
             nn.ReLU(),
         )
 
-        self.vnet = nn.Linear(64, 1)
+        self.vnet = nn.Linear(256, 1)
         self.vnet.weight.data.uniform_(-init_w, init_w)
         self.vnet.bias.data.uniform_(-init_w, init_w)
     
