@@ -31,16 +31,13 @@ class PolicyNet(nn.Module):
         feat = self.featnet(x)
         mu = self.pnet_mu(feat)
         sigma = self.pnet_logs(feat).clamp(-20, 2).exp()
-        # return Independent(Normal(loc=mu, scale=sigma), reinterpreted_batch_ndims=1)
-        # return mu, sigma
         return Independent(Normal(loc=mu, scale=sigma), reinterpreted_batch_ndims=1)
     
-    def sample_action_and_compute_log_pi(self, x, reparam=False):
+    def sample_action(self, x, reparam=False):
         mu_given_s = self(x)
         u = mu_given_s.rsample() if reparam else mu_given_s.sample()
         a = torch.tanh(u)
-        logp = mu_given_s.log_prob(u) - (2 * (np.log(2) - u - F.softplus(-2 * u))).squeeze()
-        return a, logp
+        return a
 
     def act(self, x):
         with torch.no_grad():
