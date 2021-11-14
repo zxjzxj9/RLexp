@@ -1,17 +1,15 @@
 #! /usr/bin/env python
 
+import gym
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Normal, Independent
-from collections import deque
 import random
 import numpy as np
-import gym
+from collections import deque
 
 class PolicyNet(nn.Module):
 
-    def __init__(self, state_dim, act_dim, init_w=3e-3):
+    def __init__(self, state_dim, act_dim):
         super().__init__()
 
         self.state_dim = state_dim
@@ -24,29 +22,26 @@ class PolicyNet(nn.Module):
             nn.ReLU(),
         )
 
-        self.pnet_mu = nn.Linear(256, act_dim)
-        self.pnet_logs = nn.Linear(256, act_dim)
+        self.pnet = nn.Linear(256, act_dim)
     
     def forward(self, x):
         feat = self.featnet(x)
-        mu = self.pnet_mu(feat)
-        sigma = self.pnet_logs(feat).clamp(-20, 2).exp()
-        return Independent(Normal(loc=mu, scale=sigma), reinterpreted_batch_ndims=1)
-    
-    def sample_action(self, x, reparam=False):
-        mu_given_s = self(x)
-        u = mu_given_s.rsample() if reparam else mu_given_s.sample()
-        a = torch.tanh(u)
-        return a
+        return self.pnet(feat).tanh()
 
     def act(self, x):
         with torch.no_grad():
-            a = self.sample_action(x)
-            return a.cpu().item()
+            action = self(x)
+            action += 0.1*torch.randn_like(action)
+            return action.clamp(-1, 1).cpu().item()
+
+    def update(self, other, polyak=0.995):
+        with torch.no_grad():
+            for param1, param2 in zip(self.parameters(), other.parameters()):
+                param1.data.copy_(polyak*param1.data+(1-polyak)*param2.data)
 
 class DQN(nn.Module):
 
-    def __init__(self, state_dim, act_dim, init_w=3e-3):
+    def __init__(self, state_dim, act_dim):
         super().__init__()
 
         self.featnet = nn.Sequential(
@@ -74,7 +69,6 @@ class DQN(nn.Module):
             for param1, param2 in zip(self.parameters(), other.parameters()):
                 param1.data.copy_(polyak*param1.data+(1-polyak)*param2.data)
 
-
 class NormalizedActions(gym.ActionWrapper):
     def action(self, action):
         low  = self.action_space.low
@@ -92,9 +86,8 @@ class NormalizedActions(gym.ActionWrapper):
         action = 2 * (action - low) / (high - low) - 1
         action = np.clip(action, low, high)
         
-        return actions
+        return action
 
-from collections import deque
 class ExpReplayBuffer(object):
 
     def __init__(self, buffer_size):
@@ -114,7 +107,7 @@ class ExpReplayBuffer(object):
     def __len__(self):
         return len(self.buffer)
 
-def train(buffer, pnet, vnet, vnet_target, optim_p, optim_v):
+def train(buffer, pnet, pnet_target, vnet, vnet_target, optim_p, optim_v):
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
     state = torch.tensor(state, dtype=torch.float32).cuda()
     reward = torch.tensor(reward, dtype=torch.float32).cuda().unsqueeze(-1)
@@ -123,7 +116,7 @@ def train(buffer, pnet, vnet, vnet_target, optim_p, optim_v):
     done = torch.tensor(done, dtype=torch.float32).cuda().unsqueeze(-1)
 
     with torch.no_grad():
-        next_action = pnet.sample_action(next_state)
+        next_action = pnet_target(next_state)
         next_qval = vnet_target(next_state, next_action)
         target = reward + GAMMA * (1 - done) * next_qval
 
@@ -134,19 +127,64 @@ def train(buffer, pnet, vnet, vnet_target, optim_p, optim_v):
     torch.nn.utils.clip_grad_value_(vnet.parameters(), 1.0)
     optim_v.step()
 
-    # 计算损失函数
     for param in vnet.parameters():
         param.requires_grad = False
 
-    action = pnet.sample_action(state, True)
-    qval = vnet(state, action)
+    qval = vnet(state, pnet(state))
     lossp = -torch.mean(qval)
     optim_p.zero_grad()
     lossp.backward()
     torch.nn.utils.clip_grad_value_(pnet.parameters(), 1.0)
     optim_p.step()
+
     for param in vnet.parameters():
         param.requires_grad = True
 
     vnet_target.update(vnet)
+    pnet_target.update(pnet)
     return lossp
+
+BATCH_SIZE = 64
+NSTEPS = 1000000
+NBUFFER = 100000
+GAMMA = 0.99
+REG = 0.1
+env = NormalizedActions(gym.make("Pendulum-v0"))
+buffer = ExpReplayBuffer(NBUFFER)
+
+pnet = PolicyNet(env.observation_space.shape[0], env.action_space.shape[0])
+pnet_target = PolicyNet(env.observation_space.shape[0], env.action_space.shape[0])
+vnet = DQN(env.observation_space.shape[0], env.action_space.shape[0])
+vnet_target = DQN(env.observation_space.shape[0], env.action_space.shape[0])
+pnet.cuda()
+pnet_target.cuda()
+pnet_target.load_state_dict(pnet.state_dict())
+vnet.cuda()
+vnet_target.cuda()
+vnet_target.load_state_dict(vnet.state_dict())
+
+optim_p = torch.optim.Adam(pnet.parameters(), lr=1e-3)
+optim_v = torch.optim.Adam(vnet.parameters(), lr=1e-3)
+
+all_rewards = []
+all_losses = []
+episode_reward = 0
+loss = 0.0
+
+state = env.reset()
+for nstep in range(NSTEPS):
+    state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).cuda()
+    action = pnet.act(state_t)
+    next_state, reward, done, _ = env.step(action)
+    buffer.push(state, action, reward, next_state, done)
+    state = next_state
+    episode_reward += reward
+
+    if done:
+        state = env.reset()
+        all_rewards.append(episode_reward)
+        episode_reward = 0
+
+    if len(buffer) >= BATCH_SIZE:
+        loss = train(buffer, pnet, pnet_target, vnet, vnet_target, optim_p, optim_v)
+
