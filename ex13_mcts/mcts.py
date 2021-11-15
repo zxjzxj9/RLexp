@@ -19,7 +19,7 @@ class MCTSBot(pyspiel.Bot):
                 if current_node is root and self._dirichlet_noise:
                     epsilon, alpha = self._dirichlet_noise
                     noise = self._random_state.dirichlet([alpha] * len(legal_actions))
-                    egal_actions = [(a, (1 - epsilon) * p + epsilon * n)
+                    legal_actions = [(a, (1 - epsilon) * p + epsilon * n)
                         for (a, p), n in zip(legal_actions, noise)]
                 self._random_state.shuffle(legal_actions)
                 player = working_state.current_player()
