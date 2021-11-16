@@ -35,7 +35,7 @@ class PVNet(nn.Module):
         logits = self.pnet(feat)
         if mask is not None:
             logits[mask] = -float('inf')
-        value = self.vnet(feat)
+        value = self.vnet(feat).tanh()
         return logits, value
 
 if __name__ == "__main__":
