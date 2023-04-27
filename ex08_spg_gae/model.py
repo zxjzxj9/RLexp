@@ -16,9 +16,14 @@ trans = transforms.Compose([
 ])
 
 def numpy_to_tensor(x):
-    x = Image.fromarray(x)
-    x = trans(x)
-    return x.mean(0)
+    img = Image.fromarray(x)
+    img = img.convert("L")
+    img = img.crop((0, 30, 160, 200))
+    img = img.resize((84, 84))
+    img = np.array(img)/256.0
+    return torch.tensor(img - np.mean(img), dtype=torch.float32)
+    # x = trans(x)
+    # return x.mean(0)
 
 def list_to_tensor(li):
     li = [numpy_to_tensor(l) for l in li]
